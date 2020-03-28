@@ -60,17 +60,21 @@ class HttpRequestInfo(object):
         """GET / HTTP/1.0
         Host: eng.alexu.edu.eg
         """
-        string = self.method + " / HTTP/1.0\nHost: " + self.requested_host + "\r\n"
+        #self.display()
+        string = self.method + " / HTTP/1.0\r\n"
         for i in range(len(self.headers)):
             for j in range(len(self.headers[i])):
-             string += self.headers[i][j] + "\r\n"
+                if j == 0:
+                    string += self.headers[i][j] + ": "
+                else:
+                    string += self.headers[i][j]
+            string += "\r\n"
         string += "\r\n"
         print(string)
-        req = self.to_byte_array(string)
         print("*" * 50)
         print("[to_http_string] Implement me!")
         print("*" * 50)
-        return req
+        return string
 
     def to_byte_array(self, http_string):
         """

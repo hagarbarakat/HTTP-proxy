@@ -122,12 +122,12 @@ def simple_http_parsing_test_cases():
 
     http_string = "GET / HTTP/1.0\r\nHost: www.google.com\r\n"
     http_string += "Accept: application/json\r\n\r\n"
-
+    print(http_string)
     correct_value = http_string
     actual_value = req.to_http_string()
     assert correct_value == actual_value,\
         f"[Line {lineno()}] [failed] {case}"\
-        " Expected ( %s ) got ( %s )" % (correct_value, actual_value)
+        " Expected \n( %s ) got\n ( %s )" % (correct_value, actual_value)
     print(f"[success] {case}")
 
 
