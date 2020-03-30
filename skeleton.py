@@ -4,11 +4,9 @@ import os
 import enum
 import re
 import socket
-import time
-from lru import LRU
-import requests as req
+from functools import lru_cache
 
-
+cache = dict()
 class HttpRequestInfo(object):
     """
     Represents a HTTP request information
@@ -45,7 +43,7 @@ class HttpRequestInfo(object):
         # convert it to ["Host", "www.google.com"] note that the
         # port is removed (because it goes into the request_port variable)
         self.headers = headers
-
+        #self.cache = dict()
     def to_http_string(self):
         """
         Convert the HTTP request/response
@@ -157,6 +155,7 @@ def entry_point(proxy_port_number):
     #return skt
 
 
+
 def setup_sockets(proxy_port_number):
     """
     Socket logic MUST NOT be written in the any
@@ -183,8 +182,8 @@ def setup_sockets(proxy_port_number):
     # print("*" * 50)
     # print("[setup_sockets] Implement me!")
     # print("*" * 50)
+    print(cache.items())
     return skt,host,port
-
 
 def do_socket_logic(skt):
     """
@@ -200,22 +199,24 @@ def do_socket_logic(skt):
         data = http_request_pipeline(addr, response.decode("ascii"))
         print(data.requested_host, data.requested_port)
         (soc_family, _, _, _, address) = socket.getaddrinfo(data.requested_host, data.requested_port)[0]
+        print("address", address)
         target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         target.connect(address)
-        target.send(response)
-        while True:
-            response = target.recv(1024)
-            clientSocket.sendto(response, addr)
-            print(response)
-            print(response)
-            if len(response) < 1024:
-                break
-
-        # resp = req.get("http://www.webcode.me")
-        # print(resp.text.encode("ascii"))
-        ##currentTime = time.ctime(time.time()) + "\r\n"
-        # do_socket_logic(skt)
-
+        caching = cache.get(address, False)
+        if caching:
+            clientSocket.sendto(caching, addr)
+        else:
+            target.send(response)
+            s = b""
+            while True:
+                response = target.recv(1024)
+                s += response
+                clientSocket.sendto(response, addr)
+                print(response)
+                print(response)
+                if len(response) < 1024:
+                    break
+            cache[address] = s
         clientSocket.close()
     pass
 
