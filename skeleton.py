@@ -4,9 +4,12 @@ import os
 import enum
 import re
 import socket
-from functools import lru_cache
+import _thread
+
 
 cache = dict()
+
+
 class HttpRequestInfo(object):
     """
     Represents a HTTP request information
@@ -26,7 +29,6 @@ class HttpRequestInfo(object):
     including the website name.
     NOTE: you need to implement to_http_string() for this class.
     """
-
     def __init__(self, client_info, method: str, requested_host: str,
                  requested_port: int,
                  requested_path: str,
@@ -43,7 +45,7 @@ class HttpRequestInfo(object):
         # convert it to ["Host", "www.google.com"] note that the
         # port is removed (because it goes into the request_port variable)
         self.headers = headers
-        #self.cache = dict()
+
     def to_http_string(self):
         """
         Convert the HTTP request/response
@@ -63,7 +65,7 @@ class HttpRequestInfo(object):
         Host: eng.alexu.edu.eg
         """
         # self.display()
-        lists = ["GET", "HEAD", "PUT", "POST"]
+        """lists = ["GET", "HEAD", "PUT", "POST"]
         if self.method != "GET" and self.method in lists:
             error = HttpErrorResponse(501, "Not Implemented")
             error = error.to_http_string()
@@ -71,22 +73,19 @@ class HttpRequestInfo(object):
         elif self.method not in lists:
             error = HttpErrorResponse(400, "Bad Request")
             error = error.to_http_string()
-            return error
-        else:
-            string = self.method + " / HTTP/1.0\r\n"
-            for i in range(len(self.headers)):
-                for j in range(len(self.headers[i])):
-                    if j == 0:
-                        string += self.headers[i][j] + ": "
-                    else:
-                        string += self.headers[i][j]
-                string += "\r\n"
+            return error"""
+        #else:
+        string = self.method + " / HTTP/1.0\r\n"
+        for i in range(len(self.headers)):
+            for j in range(len(self.headers[i])):
+                if j == 0:
+                    string += self.headers[i][j] + ": "
+                else:
+                    string += self.headers[i][j]
             string += "\r\n"
-            print(string)
-            #print("*" * 50)
-            #print("[to_http_string] Implement me!")
-            #print("*" * 50)
-            return string
+        string += "\r\n"
+        print(string)
+        return string
 
     def to_byte_array(self, http_string):
         """
@@ -147,13 +146,7 @@ def entry_point(proxy_port_number):
     inside it.
     """
 
-    skt,host,port = setup_sockets(proxy_port_number)
-
-    #print("*" * 50)
-    #print("[entry_point] Implement me!")
-    #print("*" * 50)
-    #return skt
-
+    setup_sockets(proxy_port_number)
 
 
 def setup_sockets(proxy_port_number):
@@ -165,7 +158,7 @@ def setup_sockets(proxy_port_number):
     """
     print("Starting HTTP proxy on port:", proxy_port_number)
     skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    host = socket.gethostname()  # or just use (host == '')
+    host = socket.gethostname()
     port = int(proxy_port_number)
     skt.bind((host, port))
     try:
@@ -176,14 +169,8 @@ def setup_sockets(proxy_port_number):
         print('Failed to create socket')
         skt.close()
     do_socket_logic(skt)
-        # when calling socket.listen() pass a number
-    # that's larger than 10 to avoid rejecting
-    # connections automatically.
-    # print("*" * 50)
-    # print("[setup_sockets] Implement me!")
-    # print("*" * 50)
     print(cache.items())
-    return skt,host,port
+
 
 def do_socket_logic(skt):
     """
@@ -191,34 +178,46 @@ def do_socket_logic(skt):
     want to be tidy and avoid stuffing the main function.
     Feel free to delete this function.
     """
+    i = 0
     while True:
         clientSocket, addr = skt.accept()
         print("got a connection from %s" % str(addr))
         response = clientSocket.recv(1024)
-        print("response: ", response)
-        data = http_request_pipeline(addr, response.decode("ascii"))
-        print(data.requested_host, data.requested_port)
-        (soc_family, _, _, _, address) = socket.getaddrinfo(data.requested_host, data.requested_port)[0]
-        print("address", address)
-        target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        target.connect(address)
-        caching = cache.get(address, False)
-        if caching:
-            clientSocket.sendto(caching, addr)
-        else:
-            target.send(response)
-            s = b""
-            while True:
-                response = target.recv(1024)
-                s += response
-                clientSocket.sendto(response, addr)
-                print(response)
-                print(response)
-                if len(response) < 1024:
-                    break
-            cache[address] = s
-        clientSocket.close()
+        try:
+            _thread.start_new_thread(logic, ("thread"+str(i), clientSocket, addr, response))
+            i += 1
+        except _thread.error:
+            print("Error: unable to start thread")
+
     pass
+
+
+def logic(threadName, clientSocket, addr, response):
+    print(threadName)
+    print("response: ", response)
+    data = http_request_pipeline(addr, response.decode("ascii"))
+    print(data.requested_host, data.requested_port)
+    (soc_family, _, _, _, address) = socket.getaddrinfo(data.requested_host, data.requested_port)[0]
+    print("address", address)
+    target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    target.connect(address)
+    print(cache.items())
+    caching = cache.get(address, False)
+    if caching:
+        clientSocket.sendto(caching, addr)
+    else:
+        target.send(response)
+        s = b""
+        while True:
+            response = target.recv(1024)
+            s += response
+            clientSocket.sendto(response, addr)
+            print(response)
+            print(response)
+            if len(response) < 1024:
+                break
+        cache[address] = s
+    clientSocket.close()
 
 
 def http_request_pipeline(source_addr, http_raw_data):
@@ -246,14 +245,7 @@ def http_request_pipeline(source_addr, http_raw_data):
         parse = parse_http_request(source_addr, http_raw_data)
         sanitize_http_request(parse)
         return parse
-    #return None
-    # Return error if needed, then:
-    # parse_http_request()
-    # sanitize_http_request()
-    # Validate, sanitize, return Http object.
-    #print("*" * 50)
-    #print("[http_request_pipeline] Implement me!")
-    #print("*" * 50)
+
 
 
 
@@ -263,11 +255,10 @@ def parse_http_request(source_addr, http_raw_data):
     object.
     """
     splitt = re.split("[\s\n]", http_raw_data)
+    method = "GET"
     if splitt[1] == '/':
         header = []
-        method = splitt[0]
         path = splitt[1]
-        version = splitt[2]
         host = splitt[5]
         lists = ["Host", splitt[5]]
         header.append(lists)
@@ -279,12 +270,23 @@ def parse_http_request(source_addr, http_raw_data):
             port = port[1]
         else:
             port = "80"
-
+    elif splitt[0] == "curl":
+        header = []
+        #curl --http1.0 --proxy 127.0.0.1:8080 -X GET http://www.goole.com
+        if re.search(":",splitt[3]):
+            port = re.split(":",splitt[3])
+            port = port[1]
+        else:
+            port = 80
+        host = re.split("//",splitt[6])
+        host = host[1]
+        print("host: ", host)
+        path = "/"
+        lists = ["Host", host]
+        header.append(lists)
     else:
         header = []
-        method = splitt[0]
-        path = splitt[1]
-        version = splitt[2]
+        path = "/"
         host = splitt[1]
         if ":" in splitt[splitt.index(path)]:
             port = re.split(":", splitt[splitt.index(path)])
@@ -295,11 +297,12 @@ def parse_http_request(source_addr, http_raw_data):
         header.append(lists)
         if "Accept:" in splitt:
             lists = ["Accept", splitt[splitt.index("Accept:") + 1]]
+            i = 2
+            while splitt[splitt.index("Accept:") + i] != "\r":
+                lists.append(splitt[splitt.index("Accept:") + i] )
+                i += 1
             header.append(lists)
     print(splitt)
-    #print("*" * 50)
-    #print("[parse_http_request] Implement me!")
-    #print("*" * 50)
     # Replace this line with the correct values.
     ret = HttpRequestInfo(http_raw_data, method, host, int(port), path, header)
     return ret
@@ -313,33 +316,43 @@ def check_http_request_validity(http_raw_data) -> HttpRequestState:
     """
     splitt = re.split("[\s\n]", http_raw_data)
     if splitt[1] == "/":
-        print("type 1")
         return check(splitt, 1)
     else:
         return check(splitt, 2)
-    #print("*" * 50)
-    #print("[check_http_request_validity] Implement me!")
-    #print("*" * 50)
-    #return HttpRequestState.GOOD  # (for example)
-    # return HttpRequestState.PLACEHOLDER
 
 
 def check(splitt, type):
     lists = ["GET", "HEAD", "PUT", "DELETE"]
-    if splitt[0] not in lists:
+    """
+    # using re + search() 
+    # to get string with substring  
+    res = [x for x in test_list if re.search(subs, x)] 
+  """
+    print(str(splitt))
+    method = set(splitt) & set(lists)
+    print(bool(set(splitt) & set(lists)) )
+    if not bool(set(splitt) & set(lists)):
         return HttpRequestState.INVALID_INPUT
     if "HTTP/1.0" not in splitt:
+        print("1")
         return HttpRequestState.INVALID_INPUT
     if "Host:" not in splitt and type == 1:
+        print("23")
         return HttpRequestState.INVALID_INPUT
     # TODO : no colon no value
     if "Accept" in splitt:
+        print("4")
+
         return HttpRequestState.INVALID_INPUT
     if "Accept:" in splitt:
+        print("5")
+
         index = splitt.index("Accept:") + 1
         if splitt[index] == " ":
             return HttpRequestState.INVALID_INPUT
-    if splitt[0] != "GET" and splitt[0] in lists:
+    if method.pop() != "GET" and bool(set(splitt) & set(lists)):
+
+        print("6")
         return HttpRequestState.NOT_SUPPORTED
     return HttpRequestState.GOOD
 
@@ -352,7 +365,18 @@ def sanitize_http_request(request_info: HttpRequestInfo):
     returns:
     nothing, but modifies the input object
     """
-
+    print("sanitize: ", request_info.requested_host)
+    request_info.method = "GET /HTTP/1.0"
+    string = ""
+    for i in range(len(request_info.headers)):
+        for j in range(len(request_info.headers[i])):
+            if j == 0 and len(request_info.headers[i]) > 1:
+                string += request_info.headers[i][j] + ": "
+            else:
+                string += request_info.headers[i][j]
+        string += "\r\n"
+    print(request_info.method)
+    print(string)
     print("*" * 50)
     print("[sanitize_http_request] Implement me!")
     print("*" * 50)
