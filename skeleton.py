@@ -288,8 +288,8 @@ def parse_http_request(source_addr, http_raw_data):
         header = []
         path = "/"
         host = splitt[1]
-        if ":" in splitt[splitt.index(path)]:
-            port = re.split(":", splitt[splitt.index(path)])
+        if host.find(":") != -1:
+            port = re.split(":", host)
             port = port[1]
         else:
             port = "80"
@@ -327,31 +327,30 @@ def check(splitt, type):
     # using re + search() 
     # to get string with substring  
     res = [x for x in test_list if re.search(subs, x)] 
-  """
+    """
     print(str(splitt))
     method = set(splitt) & set(lists)
-    print(bool(set(splitt) & set(lists)) )
+    print(bool(set(splitt) & set(lists)))
     if not bool(set(splitt) & set(lists)):
         return HttpRequestState.INVALID_INPUT
     if "HTTP/1.0" not in splitt:
         print("1")
         return HttpRequestState.INVALID_INPUT
     if "Host:" not in splitt and type == 1:
-        print("23")
         return HttpRequestState.INVALID_INPUT
-    # TODO : no colon no value
+    if "Host:" in splitt:
+        index = splitt.index("Host:") + 1
+        if splitt[index] == " ":
+            return HttpRequestState.INVALID_INPUT
     if "Accept" in splitt:
         print("4")
-
         return HttpRequestState.INVALID_INPUT
     if "Accept:" in splitt:
         print("5")
-
         index = splitt.index("Accept:") + 1
         if splitt[index] == " ":
             return HttpRequestState.INVALID_INPUT
     if method.pop() != "GET" and bool(set(splitt) & set(lists)):
-
         print("6")
         return HttpRequestState.NOT_SUPPORTED
     return HttpRequestState.GOOD
