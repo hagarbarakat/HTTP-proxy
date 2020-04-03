@@ -84,7 +84,6 @@ class HttpRequestInfo(object):
                     string += self.headers[i][j]
             string += "\r\n"
         string += "\r\n"
-        print(string)
         return string
 
     def to_byte_array(self, http_string):
@@ -169,7 +168,6 @@ def setup_sockets(proxy_port_number):
         print('Failed to create socket')
         skt.close()
     do_socket_logic(skt)
-    print(cache.items())
 
 
 def do_socket_logic(skt):
@@ -193,7 +191,6 @@ def do_socket_logic(skt):
 
 
 def logic(threadName, clientSocket, addr, response):
-    print(threadName)
     print("response: ", response)
     data = http_request_pipeline(addr, response.decode("ascii"))
     print(data.requested_host, data.requested_port)
@@ -201,7 +198,6 @@ def logic(threadName, clientSocket, addr, response):
     print("address", address)
     target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     target.connect(address)
-    print(cache.items())
     caching = cache.get(address, False)
     if caching:
         clientSocket.sendto(caching, addr)
@@ -212,8 +208,6 @@ def logic(threadName, clientSocket, addr, response):
             response = target.recv(1024)
             s += response
             clientSocket.sendto(response, addr)
-            print(response)
-            print(response)
             if len(response) < 1024:
                 break
         cache[address] = s
@@ -254,55 +248,54 @@ def parse_http_request(source_addr, http_raw_data):
     This function parses a "valid" HTTP request into an HttpRequestInfo
     object.
     """
-    splitt = re.split("[\s\n]", http_raw_data)
-    method = "GET"
-    if splitt[1] == '/':
+    method = "GET"  # since we got over validate therefore  method is "GET"
+    splitt = re.split("\r\n", http_raw_data)  # split by new line
+    #check len of splitt which reflects number of lines
+    length = len(splitt)
+    if length == 2:  # absolute format
         header = []
-        path = splitt[1]
-        host = splitt[5]
-        lists = ["Host", splitt[5]]
-        header.append(lists)
-        if "Accept:" in splitt:
-            lists = ["Accept", splitt[splitt.index("Accept:") + 1]]
-            header.append(lists)
-        if ":" in splitt[splitt.index(host) + 1]:
-            port = re.split(":", splitt[splitt.index(host) + 1])
+        splitting = re.split("\s", splitt[0])
+        url = re.split("://", splitting[1])
+        host = url[1]
+        host = re.split("/", host)
+        if host[1] != "":
+            path = "/" + host[1]
+        else:
+            path = "/"
+        if host[0].find(":") != -1:
+            port = re.split(":", host[0])
             port = port[1]
         else:
             port = "80"
-    elif splitt[0] == "curl":
-        header = []
-        #curl --http1.0 --proxy 127.0.0.1:8080 -X GET http://www.goole.com
-        if re.search(":",splitt[3]):
-            port = re.split(":",splitt[3])
-            port = port[1]
-        else:
-            port = 80
-        host = re.split("//",splitt[6])
-        host = host[1]
-        print("host: ", host)
-        path = "/"
-        lists = ["Host", host]
+        lists = ["Host", host[0]]
         header.append(lists)
-    else:
-        header = []
-        path = "/"
-        host = splitt[1]
-        if host.find(":") != -1:
-            port = re.split(":", host)
-            port = port[1]
-        else:
-            port = "80"
-        lists = ["Host", splitt[1]]
-        header.append(lists)
-        if "Accept:" in splitt:
-            lists = ["Accept", splitt[splitt.index("Accept:") + 1]]
+        if "Accept:" in splitting:
+            lists = ["Accept", splitting[splitting.index("Accept:") + 1]]
             i = 2
-            while splitt[splitt.index("Accept:") + i] != "\r":
-                lists.append(splitt[splitt.index("Accept:") + i] )
+            while splitting[splitting.index("Accept:") + i] != "\r":
+                lists.append(splitting[splitting.index("Accept:") + i])
                 i += 1
             header.append(lists)
-    print(splitt)
+        host = host[0]
+    else:
+        splitting = re.split("\s", splitt[0])
+        path = splitting[1]
+        i = 1
+        lists = []
+        while i < len(splitt):
+            headers = re.split(": ", splitt[i])
+            if i == 1:
+                host = headers[1]
+                if host.find(":") != -1:
+                    port = re.split(":",host)
+                    port = port[1]
+                else:
+                    port = 80
+            if splitt[i] != '':
+                list = [headers[0], headers[1]]
+                lists.append(list)
+            i += 1
+        header = lists
     # Replace this line with the correct values.
     ret = HttpRequestInfo(http_raw_data, method, host, int(port), path, header)
     return ret
@@ -314,6 +307,7 @@ def check_http_request_validity(http_raw_data) -> HttpRequestState:
     returns:
     One of values in HttpRequestState
     """
+
     splitt = re.split("[\s\n]", http_raw_data)
     if splitt[1] == "/":
         return check(splitt, 1)
@@ -328,13 +322,10 @@ def check(splitt, type):
     # to get string with substring  
     res = [x for x in test_list if re.search(subs, x)] 
     """
-    print(str(splitt))
     method = set(splitt) & set(lists)
-    print(bool(set(splitt) & set(lists)))
     if not bool(set(splitt) & set(lists)):
         return HttpRequestState.INVALID_INPUT
     if "HTTP/1.0" not in splitt:
-        print("1")
         return HttpRequestState.INVALID_INPUT
     if "Host:" not in splitt and type == 1:
         return HttpRequestState.INVALID_INPUT
@@ -343,15 +334,12 @@ def check(splitt, type):
         if splitt[index] == " ":
             return HttpRequestState.INVALID_INPUT
     if "Accept" in splitt:
-        print("4")
         return HttpRequestState.INVALID_INPUT
     if "Accept:" in splitt:
-        print("5")
         index = splitt.index("Accept:") + 1
         if splitt[index] == " ":
             return HttpRequestState.INVALID_INPUT
     if method.pop() != "GET" and bool(set(splitt) & set(lists)):
-        print("6")
         return HttpRequestState.NOT_SUPPORTED
     return HttpRequestState.GOOD
 

@@ -24,7 +24,9 @@ def simple_http_parsing_test_cases():
     #######################################
     case = "Parse HTTP method."
 
-    req_str = "GET http://google.com/ HTTP/1.0\r\n"
+    req_str = "GET / HTTP/1.0\r\nHost: www.google.com\r\n"
+    req_str += "Accept: application/json\r\n"
+    req_str += "AYhAGA: AJSJBD/KSDNCN\r\n\r\n"
     parsed = parse_http_request(client_addr, req_str)
 
     actual_value = parsed.method
@@ -102,7 +104,7 @@ def simple_http_parsing_test_cases():
     #######################################
     case = "Parse HTTP headers"
 
-    req_str = "GET / HTTP/1.0\r\nHost: www.google.com\r\nAccept: application/json\r\n\r\n"
+    req_str = "GET / HTTP/1.0\r\nHost: www.google.com:8080\r\nAccept: application/json\r\n\r\n"
     parsed = parse_http_request(client_addr, req_str)
 
     actual_value = str(len(parsed.headers))
@@ -117,13 +119,13 @@ def simple_http_parsing_test_cases():
     case = "convert HttpRequestInfo to a the corresponding HTTP request"
     # A request to www.google.com/ , note adding the ":" to headers
     # "Host" header comes first
-    headers = [["Host", "www.google.com"], ["Accept", "application/json"]]
+    headers = [["Host", "www.google.com:8080"], ["Accept", "application/json"], ["AYhAGA","AJSJBD/KSDNCN"]]
     req = HttpRequestInfo(client_addr, "GET",
                           "www.google.com", 80, "/", headers)
 
-    http_string = "GET / HTTP/1.0\r\nHost: www.google.com\r\n"
-    http_string += "Accept: application/json\r\n\r\n"
-    print(http_string)
+    http_string = "GET / HTTP/1.0\r\nHost: www.google.com:8080\r\n"
+    http_string += "Accept: application/json\r\n"
+    http_string += "AYhAGA: AJSJBD/KSDNCN\r\n\r\n"
     correct_value = http_string
     actual_value = req.to_http_string()
     assert correct_value == actual_value,\
@@ -284,7 +286,7 @@ def main():
     # Sorted by checklist order, feel free to comment/un-comment
     # any of those functions.
     try:
-        #simple_http_validation_test_cases()
+        simple_http_validation_test_cases()
         simple_http_parsing_test_cases()
         #pipeline()
     except AssertionError as e:
