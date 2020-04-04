@@ -1,5 +1,5 @@
 import sys
-from skeleton import check_http_request_validity, parse_http_request, HttpRequestState, HttpRequestInfo,http_request_pipeline
+from server import check_http_request_validity, parse_http_request, HttpRequestState, HttpRequestInfo,http_request_pipeline
 import socket
 
 #######################################
@@ -261,18 +261,20 @@ def pipeline():
 
     #http://apache.org/
 
-        #req_str = "GET / HTTP/1.0\r\nHost: www.apache.org\r\n\r\n"
-        req_str = "curl --http1.0 --proxy 127.0.0.1:8080 -X GET http://www.goole.com"
+        #req_str = "GET / HTTP/1.0\r\nHost: www.apache.org\r\n"
+        req_str = "GET / HTTP/1.0\r\n"
         print(req_str)
         s = socket.socket(socket.AF_INET,
                           socket.SOCK_STREAM)
 
-        host = socket.gethostname()  # or just use (host = '')
+        host = "127.0.0.1" # or just use (host = '')
+        print(host)
         port = 18888
 
         s.connect((host, port))
         s.send(req_str.encode("ascii"))
-
+        req_str = "Host: www.google.com\r\n\r\n"
+        s.send(req_str.encode("ascii"))
         tm = s.recv(1024)  # msg can only be 1024 bytes long
         print(tm)
         s.close()
@@ -288,7 +290,7 @@ def main():
     try:
         simple_http_validation_test_cases()
         simple_http_parsing_test_cases()
-        #pipeline()
+        pipeline()
     except AssertionError as e:
         print("Test case failed:\n", str(e))
         exit(-1)
