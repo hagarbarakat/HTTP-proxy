@@ -75,8 +75,7 @@ class HttpRequestInfo(object):
             error = error.to_http_string()
             return error"""
         #else:
-        print(self.headers)
-        string = self.method + " / HTTP/1.0\r\n"
+        string = self.method + " "+self.requested_path + " HTTP/1.0\r\n"
         for i in range(len(self.headers)):
             for j in range(len(self.headers[i])):
                 if j == 0:
@@ -91,7 +90,7 @@ class HttpRequestInfo(object):
         """
         Converts an HTTP string to a byte array.
         """
-        return bytes(http_string, "UTF-8")
+        return bytes(http_string, "utf-8")
 
     def display(self):
         print(f"Client:", self.client_address_info)
@@ -113,7 +112,7 @@ class HttpErrorResponse(object):
 
     def to_http_string(self):
         """ Same as above """
-        string = str(self.code) + ":" + self.message
+        string = str(self.code) + " " + self.message + "\r\n"
         return string
 
     def to_byte_array(self, http_string):
@@ -184,7 +183,7 @@ def do_socket_logic(skt):
         data = b''
         while True:
             response = clientSocket.recv(1024)
-            if response.decode("ascii") == '\r\n':
+            if response.decode("utf-8") == '\r\n':
                 break
             else:
                 data += response
@@ -198,28 +197,42 @@ def do_socket_logic(skt):
 
 
 def logic(threadName, clientSocket, addr, response):
-    print("response: ", response)
-    data = http_request_pipeline(addr, response.decode("ascii"))
-    data.display()
-    print(data.requested_host, data.requested_port)
-    (soc_family, _, _, _, address) = socket.getaddrinfo(data.requested_host, data.requested_port)[0]
-    print("address", address)
-    target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    target.connect(address)
-    caching = cache.get(address, False)
-    if caching:
-        clientSocket.sendto(caching, addr)
+    data = http_request_pipeline(addr, response.decode("utf-8"))
+    if isinstance(data, HttpRequestInfo):
+        #(soc_family, _, _, _, address) = socket.getaddrinfo(data.requested_host, data.requested_port)[0]
+        address = (data.requested_host, data.requested_port)
+        try:
+            target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            target.settimeout(10)
+            target.connect(address)
+            adding = (address,data.requested_path)
+            caching = cache.get(adding, False)
+            if caching:
+                print("[PROXY] Cached data.")
+                clientSocket.sendto(caching, addr)
+            else:
+                print("[PROXY] Sending data to remote server ...")
+                target.send(data.to_byte_array(data.to_http_string()))
+                s = b""
+                print("[PROXY] Sending response to client ...")
+                while True:
+                    response = target.recv(1024)
+                    s += response
+                    clientSocket.sendto(response, addr)
+                    if len(response) < 1024:
+                        break
+                cache[adding] = s
+            clientSocket.close()
+            print("[PROXY] Process finished successfully.")
+        except socket.error as socketerror:
+            print("Error: ", socketerror)
+            error = str(socketerror)+ "\n"
+            clientSocket.sendto(error.encode("utf-8"), addr)
+            clientSocket.close()
     else:
-        target.send(data.to_byte_array(data.to_http_string()))
-        s = b""
-        while True:
-            response = target.recv(1024)
-            s += response
-            clientSocket.sendto(response, addr)
-            if len(response) < 1024:
-                break
-        cache[address] = s
-    clientSocket.close()
+        print("[PROXY] Client's error.")
+        clientSocket.sendto(data.to_byte_array(data.to_http_string()), addr)
+        clientSocket.close()
 
 
 def http_request_pipeline(source_addr, http_raw_data):
@@ -237,10 +250,10 @@ def http_request_pipeline(source_addr, http_raw_data):
     """
     # Parse HTTP request
     validity = check_http_request_validity(http_raw_data)
-    if validity == 0:
+    if validity == HttpRequestState.INVALID_INPUT:
         error = HttpErrorResponse(400, "Bad Request")
         return error
-    elif validity == 1:
+    elif validity == HttpRequestState.NOT_SUPPORTED:
         error = HttpErrorResponse(501, "Not Implemented")
         return error
     else:
@@ -259,29 +272,27 @@ def parse_http_request(source_addr, http_raw_data):
 
     method = "GET"  # since we got over validate therefore  method is "GET"
     splitt = re.split("\r\n", http_raw_data)  # split by new line
-    print(splitt)
     #check len of splitt which reflects number of lines
     length = len(splitt)
-    print(length)
     if length == 2:  # absolute format
         header = []
         splitting = re.split("\s", splitt[0])
-        url = re.split("://", splitting[1])
-        host = url[1]
-        host = re.split("/", host)
-        host = host[0]
-        print(host)
-        if host[1] != "":
-            path = "/" + host[1]
+        if "http://" in splitting[1]:
+            url = re.split("://", splitting[1])
+            host = url[1]
+        else:
+            host = splitting[1]
+        hosting = re.split("/", host)
+        host = hosting[0]
+        if hosting[1] != "":
+            path = "/" + hosting[1]
         else:
             path = "/"
         if host.find(":") != -1:
-            print(host)
             port = re.split(":", host)
             hostt = port[0]
-            print(host)
             port = port[1]
-            lists = ["Host", hostt]
+            lists = ["Host", host]
             host = hostt
         else:
             port = "80"
@@ -370,9 +381,7 @@ def sanitize_http_request(request_info: HttpRequestInfo):
     returns:
     nothing, but modifies the input object
     """
-    print("headers:", request_info.headers)
-    print("sanitize: ", request_info.requested_host)
-    request_info.method = "GET / HTTP/1.0"
+    #request_info.method = "GET / HTTP/1.0"
     string = ""
     for i in range(len(request_info.headers)):
         for j in range(len(request_info.headers[i])):
@@ -381,11 +390,10 @@ def sanitize_http_request(request_info: HttpRequestInfo):
             else:
                 string += request_info.headers[i][j]
         string += "\r\n"
-    print(request_info.method)
-    print(string)
-    print("*" * 50)
-    print("[sanitize_http_request] Implement me!")
-    print("*" * 50)
+
+    #print("*" * 50)
+    #print("[sanitize_http_request] Implement me!")
+    #print("*" * 50)
 
 
 #######################################
@@ -443,7 +451,6 @@ def main():
 
     # This argument is optional, defaults to 18888
     proxy_port_number = get_arg(1, 18888)
-    print(proxy_port_number)
     entry_point(proxy_port_number)
 
 

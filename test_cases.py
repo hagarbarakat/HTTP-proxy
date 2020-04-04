@@ -251,7 +251,7 @@ def simple_http_validation_test_cases():
     print(f"[success] {case}")
 
 def pipeline():
-    i = 2
+    i = 1
     while i > 0:
         client_addr = ("127.0.0.1", 18888)
 
@@ -262,7 +262,7 @@ def pipeline():
     #http://apache.org/
 
         #req_str = "GET / HTTP/1.0\r\nHost: www.apache.org\r\n"
-        req_str = "GET / HTTP/1.0\r\n"
+        req_str = "GET www.google.com:8080/things HTTP/1.0\r\n"
         print(req_str)
         s = socket.socket(socket.AF_INET,
                           socket.SOCK_STREAM)
@@ -273,8 +273,8 @@ def pipeline():
 
         s.connect((host, port))
         s.send(req_str.encode("ascii"))
-        req_str = "Host: www.google.com\r\n\r\n"
-        s.send(req_str.encode("ascii"))
+        #req_str = "\r\n"
+        #s.send(req_str.encode("ascii"))
         tm = s.recv(1024)  # msg can only be 1024 bytes long
         print(tm)
         s.close()
