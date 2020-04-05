@@ -422,7 +422,7 @@ def get_arg(param_index, default=None):
 
 def check_file_name():
     """
-    Checks if this file has a valid name for *submission*
+    Checks if this file has a valid name.
     leave this function and as and don't use it. it's just
     to notify you if you're submitting a file with a correct
     name.
